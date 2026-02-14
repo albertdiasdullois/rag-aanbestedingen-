@@ -1,0 +1,143 @@
+╔══════════════════════════════════════════════════════════════════╗
+║                    EXACTE UPLOAD INSTRUCTIES                     ║
+║                  Volg deze stappen LETTERLIJK                    ║
+╚══════════════════════════════════════════════════════════════════╝
+
+🚨 BELANGRIJK: Lees ALLES voordat je begint!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STAP 1: VERWIJDER DE OUDE REPOSITORY (als je die hebt)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Ga naar: https://github.com/albertdiasdullois
+2. Klik op je oude "aanbestedingen-rag" repository
+3. Klik op "Settings" (rechtsboven)
+4. Scroll helemaal naar beneden
+5. Klik op "Delete this repository"
+6. Typ de naam ter bevestiging
+7. Klik "I understand..."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STAP 2: MAAK NIEUWE REPOSITORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Ga naar: https://github.com/new
+
+2. Vul in:
+   Repository name: aanbestedingen-rag
+   Description: RAG systeem voor aanbestedingen
+   
+3. LAAT ALLES STANDAARD:
+   ✅ Public (of Private als je wilt)
+   ❌ NIET "Add a README file" aanvinken
+   ❌ NIET ".gitignore" kiezen
+   ❌ NIET "license" kiezen
+   
+4. Klik "Create repository"
+
+5. Je ziet nu een LEGE repository
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STAP 3: UPLOAD BESTANDEN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. PAK DE ZIP UIT op je computer
+   → Je ziet een folder "aanbestedingen-rag-fresh"
+   → Open deze folder
+
+2. SELECTEER ALLES in deze folder:
+   - Druk Ctrl+A (Windows) of Cmd+A (Mac)
+   - Je selecteert:
+     ✓ package.json
+     ✓ next.config.js
+     ✓ vercel.json  ← NIEUW! Belangrijk!
+     ✓ src/ folder
+     ✓ README.md
+     ✓ En alle andere bestanden
+   
+3. SLEEP ALLES naar GitHub:
+   - Klik in GitHub op "uploading an existing file"
+   - Sleep ALLE geselecteerde bestanden naar de GitHub pagina
+   - Wacht tot alles geüpload is
+   
+4. COMMIT:
+   - Scroll naar beneden
+   - Bij "Commit message" typ: "Initial commit"
+   - Klik "Commit changes"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STAP 4: VERIFIEER IN GITHUB
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Je moet in GitHub deze bestanden DIRECT in de root zien:
+
+✓ package.json          ← MET "next" erin!
+✓ vercel.json          ← NIEUW bestand!
+✓ next.config.js
+✓ tsconfig.json
+✓ tailwind.config.js
+✓ postcss.config.js
+✓ README.md
+✓ .gitignore
+✓ .env.local.example
+✓ src/                 ← Folder!
+
+KLIK op package.json en check of je dit ziet:
+  "next": "14.1.0"
+  
+KLIK op vercel.json en check of je dit ziet:
+  "framework": "nextjs"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STAP 5: DEPLOY OP VERCEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Ga naar: https://vercel.com
+
+2. Klik "Add New..." → "Project"
+
+3. Selecteer je NIEUWE "aanbestedingen-rag" repository
+
+4. Je zou nu moeten zien:
+   Framework Preset: Next.js ✅
+   
+5. Scroll naar "Environment Variables"
+
+6. Voeg deze 4 keys toe:
+
+   NEXT_PUBLIC_SUPABASE_URL
+   → [je Supabase URL]
+   
+   NEXT_PUBLIC_SUPABASE_ANON_KEY
+   → [je Supabase anon key]
+   
+   SUPABASE_SERVICE_ROLE_KEY
+   → [je Supabase service role key]
+   
+   OPENAI_API_KEY
+   → [je OpenAI key]
+
+7. Klik "Deploy"
+
+8. Wacht 2-3 minuten
+
+9. KLAAR! 🎉
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ALS HET NOG STEEDS NIET WERKT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Stuur een screenshot van:
+1. Je GitHub repository hoofdpagina
+2. De inhoud van package.json in GitHub
+3. Het Vercel import scherm
+
+Dan zoeken we het probleem samen op!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
