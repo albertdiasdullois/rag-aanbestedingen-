@@ -21,7 +21,15 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       input: text.replace(/\n/g, ' '),
     })
     
-    return response.data[0].embedding
+    const embedding = response.data[0].embedding
+    
+    // Handle both string and number[] types from Orq SDK
+    if (typeof embedding === 'string') {
+      // If it's a base64 string, decode it
+      return JSON.parse(embedding)
+    }
+    
+    return embedding as number[]
   } catch (error) {
     console.error('Error generating embedding with Orq:', error)
     throw error
