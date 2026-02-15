@@ -37,6 +37,11 @@ export async function POST(request: NextRequest) {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     
+    // READ FILE IMMEDIATELY (before async processing!)
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    console.log(`File read: ${buffer.length} bytes`)
+    
     // Upload file to Supabase Storage
     const fileName = `${Date.now()}-${file.name}`
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -81,8 +86,8 @@ export async function POST(request: NextRequest) {
 
     console.log(`Document created: ${documentData.id}`)
 
-    // Process document asynchronously
-    processDocument(documentData.id, file).catch(error => {
+    // Process document asynchronously with BUFFER (not File object!)
+    processDocument(documentData.id, buffer).catch(error => {
       console.error(`Fatal error processing document ${documentData.id}:`, error)
     })
 
@@ -100,7 +105,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processDocument(documentId: string, file: File) {
+async function processDocument(documentId: string, buffer: Buffer) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
   
   try {
@@ -118,11 +123,10 @@ async function processDocument(documentId: string, file: File) {
 
     console.log(`Verified document exists: ${documentId}`)
 
-    // Extract text from PDF
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    // Extract text from PDF using the buffer
     const data = await pdf(buffer)
     const text = data.text
+    console.log(`Extracted ${text.length} characters from PDF`)
 
     // Split into chunks
     const chunks = splitIntoChunks(text, CHUNK_SIZE, CHUNK_OVERLAP)
@@ -135,6 +139,8 @@ async function processDocument(documentId: string, file: File) {
 
     for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
       const batch = chunks.slice(i, i + BATCH_SIZE)
+      
+      console.log(`Starting batch ${Math.floor(i / BATCH_SIZE) + 1} (chunks ${i}-${i + batch.length - 1})`)
       
       // Generate embeddings for this batch in parallel
       const batchRecords = await Promise.all(
@@ -160,6 +166,8 @@ async function processDocument(documentId: string, file: File) {
         })
       )
 
+      console.log(`Generated ${batchRecords.length} embeddings for batch`)
+
       // Store this batch
       const { error: chunksError } = await supabase
         .from('document_chunks')
@@ -175,6 +183,8 @@ async function processDocument(documentId: string, file: File) {
     }
 
     // Mark document as processed
+    console.log(`Marking document ${documentId} as processed`)
+    
     const { error: updateError } = await supabase
       .from('documents')
       .update({ processed: true })
@@ -185,10 +195,10 @@ async function processDocument(documentId: string, file: File) {
       throw updateError
     }
 
-    console.log(`Successfully processed document ${documentId}`)
+    console.log(`✅ Successfully processed document ${documentId}`)
 
   } catch (error) {
-    console.error(`Error processing document ${documentId}:`, error)
+    console.error(`❌ Error processing document ${documentId}:`, error)
     
     // Mark document as failed
     await supabase
