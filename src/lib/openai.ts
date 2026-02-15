@@ -56,7 +56,7 @@ export async function generateChatCompletion(
       ],
       temperature: 0.3,
       maxTokens: 1000,
-    })
+    }) as any
     
     return response.choices[0].message.content || 'Geen antwoord gegenereerd.'
   } catch (error) {
