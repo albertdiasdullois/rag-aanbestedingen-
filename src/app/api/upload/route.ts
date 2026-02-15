@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { generateEmbedding } from '@/lib/openai'
 import pdf from 'pdf-parse'
 
 // OPTIMIZED CHUNK SETTINGS - Reduces API calls by 66%!
 const CHUNK_SIZE = 3000  // Increased from 1000
 const CHUNK_OVERLAP = 150  // Reduced from 200
+
+// Initialize Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +34,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await createClient()
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
     
     // Upload file to Supabase Storage
     const fileName = `${Date.now()}-${file.name}`
@@ -88,7 +92,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function processDocument(documentId: string, file: File) {
-  const supabase = await createClient()
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
   
   try {
     // Extract text from PDF
