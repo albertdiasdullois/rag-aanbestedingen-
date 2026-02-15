@@ -3,9 +3,10 @@ import { createClient } from '@supabase/supabase-js'
 import { generateEmbedding } from '@/lib/openai'
 import pdf from 'pdf-parse'
 
-// OPTIMIZED CHUNK SETTINGS - Reduces API calls by 66%!
-const CHUNK_SIZE = 3000  // Increased from 1000
-const CHUNK_OVERLAP = 150  // Reduced from 200
+// OPTIMIZED CHUNK SETTINGS
+const CHUNK_SIZE = 3000
+const CHUNK_OVERLAP = 150
+const BATCH_SIZE = 5  // Process 5 embeddings at a time
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -101,42 +102,54 @@ async function processDocument(documentId: string, file: File) {
     const data = await pdf(buffer)
     const text = data.text
 
-    // Split into chunks with OPTIMIZED settings
+    // Split into chunks
     const chunks = splitIntoChunks(text, CHUNK_SIZE, CHUNK_OVERLAP)
     
     console.log(`Processing ${chunks.length} chunks for document ${documentId}`)
 
-    // Generate embeddings and store chunks
-    const chunkRecords = await Promise.all(
-      chunks.map(async (chunk, index) => {
-        try {
-          const embedding = await generateEmbedding(chunk)
-          
-          return {
-            document_id: documentId,
-            content: chunk,
-            embedding: embedding,
-            chunk_index: index,
-            metadata: {
-              chunk_size: chunk.length,
-              total_chunks: chunks.length
+    // Process chunks in batches to avoid timeout
+    const totalChunks = chunks.length
+    let processedCount = 0
+
+    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+      const batch = chunks.slice(i, i + BATCH_SIZE)
+      
+      // Generate embeddings for this batch in parallel
+      const batchRecords = await Promise.all(
+        batch.map(async (chunk, batchIndex) => {
+          try {
+            const globalIndex = i + batchIndex
+            const embedding = await generateEmbedding(chunk)
+            
+            return {
+              document_id: documentId,
+              content: chunk,
+              embedding: embedding,
+              chunk_index: globalIndex,
+              metadata: {
+                chunk_size: chunk.length,
+                total_chunks: totalChunks
+              }
             }
+          } catch (error) {
+            console.error(`Error generating embedding for chunk ${i + batchIndex}:`, error)
+            throw error
           }
-        } catch (error) {
-          console.error(`Error generating embedding for chunk ${index}:`, error)
-          throw error
-        }
-      })
-    )
+        })
+      )
 
-    // Store all chunks with embeddings
-    const { error: chunksError } = await supabase
-      .from('document_chunks')
-      .insert(chunkRecords)
+      // Store this batch
+      const { error: chunksError } = await supabase
+        .from('document_chunks')
+        .insert(batchRecords)
 
-    if (chunksError) {
-      console.error('Error storing chunks with embeddings:', chunksError)
-      throw chunksError
+      if (chunksError) {
+        console.error('Error storing batch:', chunksError)
+        throw chunksError
+      }
+
+      processedCount += batchRecords.length
+      console.log(`Processed ${processedCount}/${totalChunks} chunks`)
     }
 
     // Mark document as processed
@@ -178,12 +191,10 @@ function splitIntoChunks(
     const end = Math.min(start + chunkSize, text.length)
     const chunk = text.slice(start, end)
     
-    // Only add non-empty chunks
     if (chunk.trim().length > 0) {
       chunks.push(chunk.trim())
     }
     
-    // Move to next chunk with overlap
     start += chunkSize - overlap
   }
 
