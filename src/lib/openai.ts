@@ -7,8 +7,10 @@ if (!ORQ_API_KEY) {
   throw new Error('Missing ORQ_API_KEY environment variable')
 }
 
+// Initialize with explicit server URL
 export const orq = new Orq({
   apiKey: ORQ_API_KEY,
+  serverURL: 'https://api.orq.ai',
 })
 
 /**
