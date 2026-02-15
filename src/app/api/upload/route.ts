@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
-import { processDocument, getFileType } from '@/lib/document-processor'
-import { storeChunksWithEmbeddings, markDocumentAsProcessed } from '@/lib/embeddings'
+import { createClient } from '@/lib/supabase/server'
+import { generateEmbedding } from '@/lib/openai'
+import pdf from 'pdf-parse'
+
+// OPTIMIZED CHUNK SETTINGS - Reduces API calls by 66%!
+const CHUNK_SIZE = 3000  // Increased from 1000
+const CHUNK_OVERLAP = 150  // Reduced from 200
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,103 +14,174 @@ export async function POST(request: NextRequest) {
     
     if (!file) {
       return NextResponse.json(
-        { error: 'Geen bestand geüpload' },
+        { error: 'Geen bestand gevonden' },
         { status: 400 }
       )
     }
-    
+
     // Validate file type
-    const fileType = getFileType(file.name)
-    if (!fileType) {
+    const validTypes = ['application/pdf', 'application/msword', 
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    
+    if (!validTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Niet ondersteund bestandstype. Gebruik PDF, Word of Excel.' },
+        { error: 'Ongeldig bestandstype. Alleen PDF en DOCX worden ondersteund.' },
         { status: 400 }
       )
     }
+
+    const supabase = await createClient()
     
-    // Convert file to buffer
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-    
-    // Upload to Supabase Storage
+    // Upload file to Supabase Storage
     const fileName = `${Date.now()}-${file.name}`
-    const { data: uploadData, error: uploadError } = await supabaseAdmin
-      .storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
       .from('documents')
-      .upload(fileName, buffer, {
-        contentType: file.type,
-      })
-    
+      .upload(fileName, file)
+
     if (uploadError) {
-      console.error('Upload error:', uploadError)
+      console.error('Error uploading file:', uploadError)
       return NextResponse.json(
-        { error: 'Fout bij uploaden naar storage' },
+        { error: 'Fout bij uploaden van bestand' },
         { status: 500 }
       )
     }
-    
+
     // Create document record
-    const { data: document, error: dbError } = await supabaseAdmin
+    const { data: documentData, error: documentError } = await supabase
       .from('documents')
       .insert({
-        title: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
+        title: file.name.replace(/\.[^/.]+$/, ''),
         file_name: file.name,
-        file_type: fileType,
+        file_type: file.type,
         file_path: uploadData.path,
         file_size: file.size,
-        processed: false,
+        processed: false
       })
       .select()
       .single()
-    
-    if (dbError || !document) {
-      console.error('Database error:', dbError)
+
+    if (documentError) {
+      console.error('Error creating document record:', documentError)
       return NextResponse.json(
-        { error: 'Fout bij opslaan in database' },
+        { error: 'Fout bij aanmaken van document record' },
         { status: 500 }
       )
     }
-    
-    // Process document in background
-    processDocumentInBackground(document.id, buffer, fileType)
-    
+
+    // Process document asynchronously
+    processDocument(documentData.id, file).catch(error => {
+      console.error('Error processing document:', error)
+    })
+
     return NextResponse.json({
       success: true,
-      document: {
-        id: document.id,
-        title: document.title,
-        file_name: document.file_name,
-        file_type: document.file_type,
-        status: 'processing',
-      },
+      document: documentData
     })
+
   } catch (error) {
-    console.error('Upload error:', error)
+    console.error('Error in upload route:', error)
     return NextResponse.json(
-      { error: 'Onverwachte fout bij uploaden' },
+      { error: 'Onverwachte fout opgetreden' },
       { status: 500 }
     )
   }
 }
 
-// Process document asynchronously
-async function processDocumentInBackground(
-  documentId: string,
-  buffer: Buffer,
-  fileType: 'pdf' | 'docx' | 'xlsx'
-) {
+async function processDocument(documentId: string, file: File) {
+  const supabase = await createClient()
+  
   try {
-    // Extract chunks from document
-    const chunks = await processDocument(buffer, fileType)
+    // Extract text from PDF
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    const data = await pdf(buffer)
+    const text = data.text
+
+    // Split into chunks with OPTIMIZED settings
+    const chunks = splitIntoChunks(text, CHUNK_SIZE, CHUNK_OVERLAP)
     
-    // Store chunks with embeddings
-    await storeChunksWithEmbeddings(documentId, chunks)
-    
-    // Mark as processed
-    await markDocumentAsProcessed(documentId)
-    
-    console.log(`Document ${documentId} successfully processed`)
+    console.log(`Processing ${chunks.length} chunks for document ${documentId}`)
+
+    // Generate embeddings and store chunks
+    const chunkRecords = await Promise.all(
+      chunks.map(async (chunk, index) => {
+        try {
+          const embedding = await generateEmbedding(chunk)
+          
+          return {
+            document_id: documentId,
+            content: chunk,
+            embedding: embedding,
+            chunk_index: index,
+            metadata: {
+              chunk_size: chunk.length,
+              total_chunks: chunks.length
+            }
+          }
+        } catch (error) {
+          console.error(`Error generating embedding for chunk ${index}:`, error)
+          throw error
+        }
+      })
+    )
+
+    // Store all chunks with embeddings
+    const { error: chunksError } = await supabase
+      .from('document_chunks')
+      .insert(chunkRecords)
+
+    if (chunksError) {
+      console.error('Error storing chunks with embeddings:', chunksError)
+      throw chunksError
+    }
+
+    // Mark document as processed
+    const { error: updateError } = await supabase
+      .from('documents')
+      .update({ processed: true })
+      .eq('id', documentId)
+
+    if (updateError) {
+      console.error('Error updating document status:', updateError)
+      throw updateError
+    }
+
+    console.log(`Successfully processed document ${documentId}`)
+
   } catch (error) {
     console.error(`Error processing document ${documentId}:`, error)
+    
+    // Mark document as failed
+    await supabase
+      .from('documents')
+      .update({ 
+        processed: false,
+        metadata: { error: String(error) }
+      })
+      .eq('id', documentId)
   }
+}
+
+function splitIntoChunks(
+  text: string, 
+  chunkSize: number, 
+  overlap: number
+): string[] {
+  const chunks: string[] = []
+  let start = 0
+
+  while (start < text.length) {
+    const end = Math.min(start + chunkSize, text.length)
+    const chunk = text.slice(start, end)
+    
+    // Only add non-empty chunks
+    if (chunk.trim().length > 0) {
+      chunks.push(chunk.trim())
+    }
+    
+    // Move to next chunk with overlap
+    start += chunkSize - overlap
+  }
+
+  return chunks
 }
