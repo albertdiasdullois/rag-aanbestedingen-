@@ -67,15 +67,23 @@ export async function POST(request: NextRequest) {
 
     if (documentError) {
       console.error('Error creating document record:', documentError)
+      
+      // Clean up uploaded file
+      await supabase.storage
+        .from('documents')
+        .remove([uploadData.path])
+      
       return NextResponse.json(
         { error: 'Fout bij aanmaken van document record' },
         { status: 500 }
       )
     }
 
+    console.log(`Document created: ${documentData.id}`)
+
     // Process document asynchronously
     processDocument(documentData.id, file).catch(error => {
-      console.error('Error processing document:', error)
+      console.error(`Fatal error processing document ${documentData.id}:`, error)
     })
 
     return NextResponse.json({
@@ -96,6 +104,20 @@ async function processDocument(documentId: string, file: File) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
   
   try {
+    // VERIFY DOCUMENT EXISTS
+    const { data: docExists, error: checkError } = await supabase
+      .from('documents')
+      .select('id')
+      .eq('id', documentId)
+      .single()
+
+    if (checkError || !docExists) {
+      console.error(`Document ${documentId} not found in database:`, checkError)
+      throw new Error(`Document ${documentId} does not exist`)
+    }
+
+    console.log(`Verified document exists: ${documentId}`)
+
     // Extract text from PDF
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
@@ -144,7 +166,7 @@ async function processDocument(documentId: string, file: File) {
         .insert(batchRecords)
 
       if (chunksError) {
-        console.error('Error storing batch:', chunksError)
+        console.error(`Error storing batch ${i}-${i + batch.length}:`, chunksError)
         throw chunksError
       }
 
