@@ -3,9 +3,9 @@ import { createClient } from '@supabase/supabase-js'
 import { generateEmbedding } from '@/lib/openai'
 import pdf from 'pdf-parse'
 
-// OPTIMIZED CHUNK SETTINGS
-const CHUNK_SIZE = 3000
-const CHUNK_OVERLAP = 150
+// EXTREME CHUNK SETTINGS FOR SPEED
+const CHUNK_SIZE = 8000  // Increased from 3000!
+const CHUNK_OVERLAP = 200
 const BATCH_SIZE = 5  // Process 5 embeddings at a time
 
 // Initialize Supabase client
@@ -128,10 +128,10 @@ async function processDocument(documentId: string, buffer: Buffer) {
     const text = data.text
     console.log(`Extracted ${text.length} characters from PDF`)
 
-    // Split into chunks
+    // Split into chunks with EXTREME settings
     const chunks = splitIntoChunks(text, CHUNK_SIZE, CHUNK_OVERLAP)
     
-    console.log(`Processing ${chunks.length} chunks for document ${documentId}`)
+    console.log(`🚀 Processing ${chunks.length} chunks (CHUNK_SIZE: ${CHUNK_SIZE}) for document ${documentId}`)
 
     // Process chunks in batches to avoid timeout
     const totalChunks = chunks.length
@@ -140,7 +140,7 @@ async function processDocument(documentId: string, buffer: Buffer) {
     for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
       const batch = chunks.slice(i, i + BATCH_SIZE)
       
-      console.log(`Starting batch ${Math.floor(i / BATCH_SIZE) + 1} (chunks ${i}-${i + batch.length - 1})`)
+      console.log(`⚡ Starting batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(totalChunks / BATCH_SIZE)} (chunks ${i}-${i + batch.length - 1})`)
       
       // Generate embeddings for this batch in parallel
       const batchRecords = await Promise.all(
@@ -166,7 +166,7 @@ async function processDocument(documentId: string, buffer: Buffer) {
         })
       )
 
-      console.log(`Generated ${batchRecords.length} embeddings for batch`)
+      console.log(`✅ Generated ${batchRecords.length} embeddings for batch`)
 
       // Store this batch
       const { error: chunksError } = await supabase
@@ -179,11 +179,11 @@ async function processDocument(documentId: string, buffer: Buffer) {
       }
 
       processedCount += batchRecords.length
-      console.log(`Processed ${processedCount}/${totalChunks} chunks`)
+      console.log(`📊 Processed ${processedCount}/${totalChunks} chunks (${Math.round(processedCount/totalChunks * 100)}%)`)
     }
 
     // Mark document as processed
-    console.log(`Marking document ${documentId} as processed`)
+    console.log(`🏁 Marking document ${documentId} as processed`)
     
     const { error: updateError } = await supabase
       .from('documents')
